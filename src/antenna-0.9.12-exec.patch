@@ -1,0 +1,127 @@
+diff -r -u antenna-src-0.9.12\src\de\pleumann\antenna\pre\Preprocessor.java antenna-src-0.9.12-patched\src\de\pleumann\antenna\pre\Preprocessor.java
+--- antenna-src-0.9.12\src\de\pleumann\antenna\pre\Preprocessor.java	Sat Apr 24 16:56:26 2004
++++ antenna-src-0.9.12-patched\src\de\pleumann\antenna\pre\Preprocessor.java	Sat May 15 16:49:38 2004
+@@ -1,5 +1,5 @@
+ /* -----------------------------------------------------------------------------
+- * Antenna - An Ant-to-end solution for wireless Java 
++ * Antenna - An Ant-to-end solution for wireless Java
+  *
+  * Copyright (c) 2002-2004 Joerg Pleumann <joerg@pleumann.de>
+  *
+@@ -20,7 +20,7 @@
+  */
+ package de.pleumann.antenna.pre;
+ 
+-import java.io.File;
++import java.io.*;
+ import java.util.Stack;
+ 
+ import de.pleumann.antenna.misc.Strings;
+@@ -334,6 +334,42 @@
+ 					 */
+ 					i = i + 1; //i = i; // + 1; // include.size() + 2;
+ 				}
++				/**
++				 * Handle execution of external programs.
++				 */
++				else if (l.getType() == PreprocessorLine.TYPE_EXEC) {
++				        Process          p;
++				        LineNumberReader lnr;
++				        String           line;
++
++                                        lines.delete(i);
++                                        try {
++                                            	if ((mode & MODE_INDENT) == 0) {
++                                            	        lines.insert(i++, "// " + l.getSpace() + "Exec directive running external program:");
++                                            	        lines.insert(i++, "// " + l.getSpace() + l.getArgs().replace('\\', '/'));
++                                            	} else {
++                                            	        lines.insert(i++, l.getSpace() + "// " + "Exec directive running external program:");
++                                            	        lines.insert(i++, l.getSpace() + "// " + l.getArgs().replace('\\', '/'));
++                                            	}
++                                            	p = Runtime.getRuntime().exec(l.getArgs());
++                                                lnr = new LineNumberReader(new InputStreamReader(p.getErrorStream()));
++                                            	while ((line = lnr.readLine()) != null)
++		                                        if ((mode & MODE_INDENT) == 0)
++		                                                lines.insert(i++, "// " + l.getSpace() + line);
++		                                        else
++		                                             	lines.insert(i++, l.getSpace() + "// " + line);
++                                                lnr.close();
++                                                lnr = new LineNumberReader(new InputStreamReader(p.getInputStream()));
++                                            	while ((line = lnr.readLine()) != null)
++		                                        lines.insert(i++, l.getSpace() + line);
++                                                lnr.close();
++                                                p.getOutputStream().close();
++                                                modified = true;
++                                        } catch (Exception e) {
++                                                throw new PreprocessorException("Error in exec: " + e.toString());
++                                        }
++                                        i++;
++                                }
+ 				/**
+ 				 * Normal stuff goes here.
+ 				 */
+diff -r -u antenna-src-0.9.12\src\de\pleumann\antenna\pre\PreprocessorLine.java antenna-src-0.9.12-patched\src\de\pleumann\antenna\pre\PreprocessorLine.java
+--- antenna-src-0.9.12\src\de\pleumann\antenna\pre\PreprocessorLine.java	Sat Apr 24 16:56:26 2004
++++ antenna-src-0.9.12-patched\src\de\pleumann\antenna\pre\PreprocessorLine.java	Sat May 15 15:01:54 2004
+@@ -1,18 +1,18 @@
+ /* -----------------------------------------------------------------------------
+- * Antenna - An Ant-to-end solution for wireless Java 
++ * Antenna - An Ant-to-end solution for wireless Java
+  *
+  * Copyright (c) 2002-2004 Joerg Pleumann <joerg@pleumann.de>
+- * 
++ *
+  * This library is free software; you can redistribute it and/or modify it under
+  * the terms of the GNU Lesser General Public License as published by the Free
+  * Software Foundation; either version 2 of the License, or (at your option) any
+  * later version.
+- * 
++ *
+  * This library is distributed in the hope that it will be useful, but WITHOUT
+  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+  * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+  * details.
+- * 
++ *
+  * You should have received a copy of the GNU Lesser General Public License
+  * along with this library; if not, write to the Free Software Foundation, Inc.,
+  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+@@ -28,7 +28,8 @@
+ class PreprocessorLine {
+ 
+     public static final String[] types = { "VISIBLE(0)", "HIDDEN(1)", "DEFINE(2)", "UNDEF(3)", "IFDEF(4)", "IFNDEF(5)",
+-            "ELSE(6)", "ENDIF(7)", "ELIFDEF(8)", "ELIFNDEF(9)", "IF(10)", "ELIF(11)", "INCLUDE(12)", "ENDINCLUDE(13)"};
++            "ELSE(6)", "ENDIF(7)", "ELIFDEF(8)", "ELIFNDEF(9)", "IF(10)", "ELIF(11)", "INCLUDE(12)", "ENDINCLUDE(13)",
++            "EXEC(14)"};
+ 
+     /**
+      * Represents a normal line of code that is currently visible.
+@@ -102,6 +103,11 @@
+     public static final int TYPE_ENDINCLUDE = 13;
+ 
+     /**
++     * Representes a line that holds a "//#exec" statement
++     */
++    public static final int TYPE_EXEC = 14;
++
++    /**
+      * Holds the original line of source.
+      */
+     private String source;
+@@ -230,6 +236,9 @@
+             else if ("//#endinclude".equals(text)) {
+                 return TYPE_ENDINCLUDE;
+             }
++            else if ("//#exec".equals(text)) {
++                return TYPE_EXEC;
++            }
+             else {
+                 throw new PreprocessorException("Unknown directive \"" + text + "\"");
+             }
+@@ -260,4 +269,4 @@
+         return type;
+     }
+ 
+-}
+\ No newline at end of file
++}
